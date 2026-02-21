@@ -60,13 +60,94 @@ async function sendSlack(type, incident, flow, failedStep, durationMs) {
 // ─────────────────────────────────────────────────────────
 
 function buildEmailHtml(incident, flow, failedStep) {
+  const isCritical = incident.severity === "critical";
+
+  const accent = isCritical ? "#FF3D54" : "#FFC107";
+  const label = isCritical ? "CRITICAL FAILURE" : "DEGRADED PERFORMANCE";
+  const dash = process.env.FRONTEND_URL || "http://localhost:3000";
+
   return `
-    <h2>${incident.title}</h2>
-    <p><b>Flow:</b> ${flow.name}</p>
-    <p><b>Severity:</b> ${incident.severity}</p>
-    <p><b>Step:</b> ${
-      failedStep ? `${failedStep.position}. ${failedStep.name}` : "—"
-    }</p>
+  <body style="margin:0;padding:0;background:#0b0f14;font-family:Inter,Segoe UI,Arial,sans-serif;">
+    <div style="max-width:640px;margin:40px auto;background:#0f1720;border:1px solid #1e2c38;border-radius:10px;overflow:hidden">
+
+      <!-- HEADER -->
+      <div style="padding:20px 24px;border-bottom:1px solid #1e2c38">
+        <div style="color:#00d4ff;font-size:22px;font-weight:800">⬡ Syntrix</div>
+        <div style="margin-top:10px;display:inline-block;padding:6px 12px;
+          border-radius:6px;
+          background:${accent}20;
+          color:${accent};
+          font-size:11px;
+          font-weight:700;
+          letter-spacing:1px;">
+          ${label}
+        </div>
+      </div>
+
+      <!-- BODY -->
+      <div style="padding:24px">
+
+        <h2 style="color:#fff;font-size:18px;margin-bottom:20px;">
+          ${incident.title}
+        </h2>
+
+        ${gridItem("FLOW", flow.name)}
+        ${gridItem("TYPE", flow.type.toUpperCase())}
+        ${gridItem(
+          "FAILED STEP",
+          failedStep?.name
+            ? `${failedStep.position}. ${failedStep.name}`
+            : "Step info unavailable"
+        )}
+        ${gridItem("DETECTED", new Date().toUTCString())}
+        ${gridItem("SEVERITY", incident.severity.toUpperCase())}
+        ${gridItem("INTERVAL", `Every ${flow.interval_s}s`)}
+
+        <!-- BUTTONS -->
+        <div style="margin-top:28px;text-align:center;">
+          <a href="${dash}/flows/${flow.id}"
+             style="background:#FFC107;color:#000;
+             padding:12px 22px;border-radius:6px;
+             font-weight:700;text-decoration:none;margin-right:10px;">
+             View Flow Dashboard
+          </a>
+
+          <a href="${dash}/incidents/${incident.id}"
+             style="border:1px solid #FFC107;
+             color:#FFC107;
+             padding:12px 22px;border-radius:6px;
+             font-weight:700;text-decoration:none;">
+             View Incident
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </body>
+  `;
+}
+
+function gridItem(label, value) {
+  return `
+    <div style="background:#0b131a;
+      border:1px solid #1e2c38;
+      border-radius:6px;
+      padding:12px;
+      margin-bottom:10px;">
+      
+      <div style="font-size:10px;
+        letter-spacing:1.5px;
+        color:#4a657a;
+        margin-bottom:4px;">
+        ${label}
+      </div>
+
+      <div style="color:#c8d8e8;
+        font-weight:600;
+        font-size:14px;">
+        ${value}
+      </div>
+    </div>
   `;
 }
 
