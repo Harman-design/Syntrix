@@ -29,22 +29,97 @@ const isSlackConfigured = () =>
 async function sendSlack(type, incident, flow, failedStep, durationMs) {
   if (!isSlackConfigured()) return false;
 
+  const dashboardUrl =
+    process.env.FRONTEND_URL || "http://localhost:3000";
+
   const isCritical = incident.severity === "critical";
   const emoji = isCritical ? "🔴" : "🟡";
 
   try {
     if (type === "alert") {
       await axios.post(process.env.SLACK_WEBHOOK_URL, {
-        text: `${emoji} *Syntrix Alert — ${incident.title}*`,
+        text: `${emoji} Syntrix Alert`,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `${emoji} *${incident.title}*`,
+            },
+          },
+          {
+            type: "section",
+            fields: [
+              { type: "mrkdwn", text: `*Flow:*\n${flow.name}` },
+              {
+                type: "mrkdwn",
+                text: `*Step:*\n${
+                  failedStep
+                    ? `${failedStep.position}. ${failedStep.name}`
+                    : "Unknown"
+                }`,
+              },
+              {
+                type: "mrkdwn",
+                text: `*Severity:*\n${incident.severity.toUpperCase()}`,
+              },
+            ],
+          },
+          {
+            type: "actions",
+            elements: [
+              {
+                type: "button",
+                text: { type: "plain_text", text: "🔍 View Flow" },
+                url: `${dashboardUrl}/flows/${flow.id}`,
+                style: isCritical ? "danger" : "primary",
+              },
+              {
+                type: "button",
+                text: { type: "plain_text", text: "📋 Incident" },
+                url: `${dashboardUrl}/incidents/${incident.id}`,
+              },
+            ],
+          },
+        ],
       });
+
       console.log("✓ Slack alert sent");
     }
 
     if (type === "resolved") {
       const sec = Math.round(durationMs / 1000);
+
       await axios.post(process.env.SLACK_WEBHOOK_URL, {
-        text: `✅ Resolved — ${flow.name} (${sec}s)`,
+        text: `✅ Resolved — ${flow.name}`,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `✅ *Resolved: ${flow.name}*`,
+            },
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `Recovered in *${sec}s*`,
+            },
+          },
+          {
+            type: "actions",
+            elements: [
+              {
+                type: "button",
+                text: { type: "plain_text", text: "🔍 View Flow" },
+                url: `${dashboardUrl}/flows/${flow.id}`,
+              },
+            ],
+          },
+        ],
       });
+
       console.log("✓ Slack resolved sent");
     }
 
