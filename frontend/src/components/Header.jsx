@@ -38,16 +38,42 @@ export default function Header({ openIncidents = 0 }) {
 
       {/* Logo + nav */}
       <div className="flex items-center gap-8">
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <svg width="22" height="22" viewBox="0 0 28 28" fill="none">
-            <path d="M14 2L26 8V20L14 26L2 20V8L14 2Z" stroke="#00d4ff" strokeWidth="1.5" fill="rgba(0,212,255,0.07)"/>
-            <path d="M14 7L20 10.5V17.5L14 21L8 17.5V10.5L14 7Z" fill="rgba(0,212,255,0.15)" stroke="#00d4ff" strokeWidth="0.8"/>
-            <circle cx="14" cy="14" r="2.5" fill="#00d4ff"/>
-          </svg>
-          <span className="font-sans font-extrabold text-[16px] text-white tracking-tight leading-none">
-            Syn<span className="text-accent">trix</span>
-          </span>
-        </Link>
+       <div className="flex items-center gap-8">
+  <Link href="/" className="flex items-center gap-3 group">
+    
+    {/* Diamond Logo */}
+    <div className="relative w-9 h-9">
+      <div className="absolute inset-0 rotate-45 bg-amber-500/20 border border-amber-500/40"></div>
+      <div className="absolute inset-1 rotate-45 bg-amber-500/30"></div>
+
+      {/* Waveform SVG */}
+      <svg
+        viewBox="0 0 24 24"
+        className="absolute inset-0 m-auto w-5 h-5 text-amber-400 z-10"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polyline points="2,12 6,12 8,6 11,18 14,10 16,12 22,12" />
+      </svg>
+    </div>
+
+    {/* Text Logo */}
+    <div className="flex flex-col leading-none">
+      <span className="font-sans font-bold text-[17px] tracking-widest">
+        <span className="text-gray-200">SYN</span>
+        <span className="text-amber-400">TRIX</span>
+      </span>
+
+      <span className="text-[9px] tracking-[0.3em] uppercase text-gray-500">
+        Business Flow Monitor
+      </span>
+    </div>
+
+  </Link>
+</div>
 
         <nav className="flex items-center gap-0.5">
           {nav.map(({ href, label }) => {
