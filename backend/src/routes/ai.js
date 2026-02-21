@@ -2,35 +2,39 @@
 // POST /api/ai/diagnose/:incidentId
 // Sends the full incident context to Claude and streams back a diagnosis.
 
-const express = require('express');
-const router  = express.Router();
-const axios   = require('axios');
-const { query } = require('../db/pool');
+const express = require("express");
+const router = express.Router();
+const axios = require("axios");
+const { query } = require("../db/pool");
 
-const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
-const MODEL         = 'claude-sonnet-4-20250514';
+const OPENROUTER_API = "https://openrouter.ai/api/v1/chat/completions";
+const MODEL = "openai/gpt-4o-mini"; // fast + cheap;
 
 // ── POST /api/ai/diagnose/:incidentId ─────────────────────────────────────
-router.post('/diagnose/:incidentId', async (req, res) => {
+router.post("/diagnose/:incidentId", async (req, res) => {
   const { incidentId } = req.params;
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.OPENROUTER_API_KEY) {
     return res.status(501).json({
-      error: 'ANTHROPIC_API_KEY not set in backend/.env — add it to enable AI diagnosis'
+      error:
+        "OPENROUTER_API_KEY not set in backend/.env — add it to enable AI diagnosis",
     });
   }
 
   // ── 1. Fetch incident + step results ────────────────────────────────────
-  const { rows: [incident] } = await query(
+  const {
+    rows: [incident],
+  } = await query(
     `SELECT i.*, f.name AS flow_name, f.type AS flow_type, f.config AS flow_config,
             s.name AS failed_step_name, s.position AS failed_step_position
      FROM   incidents i
      JOIN   flows f ON f.id = i.flow_id
      LEFT JOIN steps s ON s.id = i.failed_step_id
-     WHERE  i.id = $1`, [incidentId]
+     WHERE  i.id = $1`,
+    [incidentId],
   );
 
-  if (!incident) return res.status(404).json({ error: 'Incident not found' });
+  if (!incident) return res.status(404).json({ error: "Incident not found" });
 
   let stepResults = [];
   if (incident.run_id) {
@@ -40,14 +44,15 @@ router.post('/diagnose/:incidentId', async (req, res) => {
        FROM   step_results sr
        JOIN   steps s ON s.id = sr.step_id
        WHERE  sr.run_id = $1
-       ORDER  BY s.position ASC`, [incident.run_id]
+       ORDER  BY s.position ASC`,
+      [incident.run_id],
     );
     stepResults = rows;
   }
 
   // ── 2. Build a rich prompt ───────────────────────────────────────────────
   const openSeconds = Math.round(
-    (Date.now() - new Date(incident.opened_at).getTime()) / 1000
+    (Date.now() - new Date(incident.opened_at).getTime()) / 1000,
   );
 
   const prompt = `You are an expert SRE (Site Reliability Engineer) analyzing a production incident detected by Syntrix, a synthetic transaction monitoring system that runs real business flows end-to-end.
@@ -58,20 +63,24 @@ INCIDENT:
 - Status: ${incident.status}
 - Open for: ${openSeconds}s
 - Flow: ${incident.flow_name} (${incident.flow_type})
-- Base URL: ${incident.flow_config?.baseUrl || 'N/A'}
+- Base URL: ${incident.flow_config?.baseUrl || "N/A"}
 
 STEP-BY-STEP EXECUTION RESULTS:
-${stepResults.map(sr => `
+${stepResults
+  .map(
+    (sr) => `
 Step ${sr.position}: ${sr.step_name}
   Status:    ${sr.status.toUpperCase()}
-  Latency:   ${sr.latency_ms ? `${sr.latency_ms}ms (p95 threshold: ${sr.threshold_p95_ms}ms)` : 'N/A'}
-  HTTP:      ${sr.http_status || 'N/A'}
-  Error:     ${sr.error || 'none'}
-  Logs:      ${sr.logs?.join(' | ') || 'none'}
-  Response:  ${sr.response_body ? sr.response_body.slice(0, 300) : 'N/A'}
-`).join('')}
+  Latency:   ${sr.latency_ms ? `${sr.latency_ms}ms (p95 threshold: ${sr.threshold_p95_ms}ms)` : "N/A"}
+  HTTP:      ${sr.http_status || "N/A"}
+  Error:     ${sr.error || "none"}
+  Logs:      ${sr.logs?.join(" | ") || "none"}
+  Response:  ${sr.response_body ? sr.response_body.slice(0, 300) : "N/A"}
+`,
+  )
+  .join("")}
 
-${incident.description ? `RAW ERROR:\n${incident.description}` : ''}
+${incident.description ? `RAW ERROR:\n${incident.description}` : ""}
 
 This is a synthetic test (no real user PII), but it accurately mirrors real user experience.
 
@@ -93,26 +102,28 @@ Respond ONLY with valid JSON matching this exact schema — no markdown, no expl
   // ── 3. Call Claude ───────────────────────────────────────────────────────
   try {
     const { data } = await axios.post(
-      ANTHROPIC_API,
+      OPENROUTER_API,
       {
-        model:      MODEL,
+        model: MODEL,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.3,
         max_tokens: 1000,
-        messages:   [{ role: 'user', content: prompt }],
       },
       {
         headers: {
-          'x-api-key':         process.env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'content-type':      'application/json',
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "http://localhost:3000",
+          "X-Title": "Syntrix",
         },
         timeout: 30000,
-      }
+      },
     );
 
-    const text = data.content?.[0]?.text || '';
+    const text = data.choices?.[0]?.message?.content || '';
 
     // Strip markdown fences if Claude wraps in ```json
-    const clean = text.replace(/```json\n?|\n?```/g, '').trim();
+    const clean = text.replace(/```json\n?|\n?```/g, "").trim();
 
     let parsed;
     try {
@@ -120,37 +131,43 @@ Respond ONLY with valid JSON matching this exact schema — no markdown, no expl
     } catch {
       // Try to extract JSON object from text
       const match = clean.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('Claude returned non-JSON response');
+      if (!match) throw new Error("Claude returned non-JSON response");
       parsed = JSON.parse(match[0]);
     }
 
     // Cache the diagnosis on the incident record (meta column)
     await query(
       `UPDATE incidents SET meta = COALESCE(meta, '{}') || $1 WHERE id = $2`,
-      [JSON.stringify({ ai_diagnosis: parsed, ai_diagnosed_at: new Date() }), incidentId]
-    ).catch(() => {});  // non-critical
+      [
+        JSON.stringify({ ai_diagnosis: parsed, ai_diagnosed_at: new Date() }),
+        incidentId,
+      ],
+    ).catch(() => {}); // non-critical
 
     res.json({ diagnosis: parsed, incidentId, model: MODEL });
-
   } catch (err) {
     if (err.response?.status === 401) {
-      return res.status(401).json({ error: 'Invalid ANTHROPIC_API_KEY' });
+      return res.status(401).json({ error: "Invalid ANTHROPIC_API_KEY" });
     }
     if (err.response?.status === 429) {
-      return res.status(429).json({ error: 'Claude API rate limit — try again in a moment' });
+      return res
+        .status(429)
+        .json({ error: "Claude API rate limit — try again in a moment" });
     }
-    console.error('[AI] Diagnosis failed:', err.message);
+    console.error("[AI] Diagnosis failed:", err.message);
     res.status(500).json({ error: `Claude API error: ${err.message}` });
   }
 });
 
 // ── GET /api/ai/diagnose/:incidentId ─────────────────────────────────────
 // Returns cached diagnosis if it exists
-router.get('/diagnose/:incidentId', async (req, res) => {
-  const { rows: [incident] } = await query(
-    'SELECT meta FROM incidents WHERE id = $1', [req.params.incidentId]
-  );
-  if (!incident) return res.status(404).json({ error: 'Not found' });
+router.get("/diagnose/:incidentId", async (req, res) => {
+  const {
+    rows: [incident],
+  } = await query("SELECT meta FROM incidents WHERE id = $1", [
+    req.params.incidentId,
+  ]);
+  if (!incident) return res.status(404).json({ error: "Not found" });
 
   const cached = incident.meta?.ai_diagnosis;
   if (cached) {

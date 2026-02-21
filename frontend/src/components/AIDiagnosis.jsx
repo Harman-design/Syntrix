@@ -60,7 +60,7 @@ export default function AIDiagnosis({ incidentId }) {
             <path d="M14 2L26 8V20L14 26L2 20V8L14 2Z" stroke="#9d4edd" strokeWidth="1.5" fill="rgba(157,78,221,0.1)"/>
             <circle cx="14" cy="14" r="3" fill="#9d4edd"/>
           </svg>
-          <span className="text-[10px] text-purple font-bold tracking-[2px] uppercase">Claude AI Diagnosis</span>
+          <span className="text-[10px] text-purple font-bold tracking-[2px] uppercase">AI Diagnosis</span>
           {cached && <span className="text-[8px] text-text3 border border-border px-1.5 py-0.5 rounded">cached</span>}
         </div>
 
