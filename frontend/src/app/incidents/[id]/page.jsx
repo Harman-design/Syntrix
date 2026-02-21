@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import clsx from 'clsx';
 import { getIncident } from '../../../lib/api';
+import AIDiagnosis from '../../../components/AIDiagnosis';
 import { Card, SectionLabel, StatusPill, Spinner, LatencyValue, fmtDuration } from '../../../components/ui';
 
 const STATUS_LEFT = {
@@ -129,6 +130,12 @@ export default function IncidentDetailPage() {
           </div>
         </div>
       )}
+
+      {/* AI Diagnosis */}
+      <div className="mb-6">
+        <SectionLabel className="mb-3">AI Diagnosis</SectionLabel>
+        <AIDiagnosis incidentId={id} />
+      </div>
 
       {/* Links */}
       <div className="flex items-center gap-5">
