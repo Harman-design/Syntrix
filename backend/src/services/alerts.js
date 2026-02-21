@@ -255,7 +255,7 @@ async function sendEmailAlert(incident, flow, failedStep) {
 
   try {
     await resend.emails.send({
-      from: "Syntrix Alerts <onboarding@syntrix-fawn.vercel.app>", // test sender
+      from: "Syntrix Alerts <onboarding@resend.dev>", // test sender
       to: process.env.ALERT_EMAIL_TO,
       subject: `[Syntrix ${incident.severity.toUpperCase()}] ${incident.title}`,
       html: buildEmailHtml(incident, flow, failedStep),
@@ -263,7 +263,7 @@ async function sendEmailAlert(incident, flow, failedStep) {
     console.log(`[Alerts] ✓ Email sent to ${process.env.ALERT_EMAIL_TO}`);
     return true;
   } catch (err) {
-    console.error("[Alerts] Email failed:", err.message);
+    console.error("[Alerts] Email failed FULL:", err);
     return false;
   }
 }
