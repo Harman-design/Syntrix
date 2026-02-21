@@ -3,26 +3,20 @@
 //   handleFailure()   — called when a run fails/degrades
 //   handleRecovery()  — called when a previously-failed flow passes again
 
-require('dotenv').config();
-const axios      = require('axios');
-const nodemailer = require('nodemailer');
-const { query }  = require('../db/pool');
-const ws         = require('../sockets');
+require("dotenv").config();
+const axios = require("axios");
+const { query } = require("../db/pool");
+const ws = require("../sockets");
 
 // ── Email transport ───────────────────────────────────────────────────────
-const mailer = nodemailer.createTransport({
-  host:   process.env.SMTP_HOST || 'smtp.gmail.com',
-  port:   parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const { Resend } = require("resend");
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-const isEmailConfigured  = () => !!process.env.SMTP_USER && !!process.env.ALERT_EMAIL_TO;
-const isSlackConfigured  = () =>
-  !!process.env.SLACK_WEBHOOK_URL && !process.env.SLACK_WEBHOOK_URL.includes('REPLACE');
+const isEmailConfigured = () =>
+  !!process.env.RESEND_API_KEY && !!process.env.ALERT_EMAIL_TO;
+const isSlackConfigured = () =>
+  !!process.env.SLACK_WEBHOOK_URL &&
+  !process.env.SLACK_WEBHOOK_URL.includes("REPLACE");
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  SLACK
@@ -30,77 +24,85 @@ const isSlackConfigured  = () =>
 
 async function sendSlackAlert(incident, flow, failedStep) {
   if (!isSlackConfigured()) {
-    console.log('[Alerts] Slack not configured — skipping.');
+    console.log("[Alerts] Slack not configured — skipping.");
     return false;
   }
 
-  const isCritical = incident.severity === 'critical';
-  const emoji = isCritical ? '🔴' : '🟡';
-  const color = isCritical ? '#FF3D54' : '#FFCA28';
-  const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}`;
+  const isCritical = incident.severity === "critical";
+  const emoji = isCritical ? "🔴" : "🟡";
+  const color = isCritical ? "#FF3D54" : "#FFCA28";
+  const dashboardUrl = `${process.env.FRONTEND_URL || "http://localhost:3000"}`;
 
   const payload = {
     text: `${emoji} *Syntrix Alert — ${incident.title}*`,
-    attachments: [{
-      color,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `${emoji} *${incident.severity.toUpperCase()}: ${incident.title}*`,
+    attachments: [
+      {
+        color,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `${emoji} *${incident.severity.toUpperCase()}: ${incident.title}*`,
+            },
           },
-        },
-        {
-          type: 'section',
-          fields: [
-            { type: 'mrkdwn', text: `*Flow:*\n${flow.name}` },
-            { type: 'mrkdwn', text: `*Type:*\n${flow.type.toUpperCase()}` },
-            {
-              type: 'mrkdwn',
-              text: failedStep
-                ? `*Failed at step:*\n${failedStep.position}. ${failedStep.name}`
-                : `*Failed step:*\nUnknown`,
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Detected:*\n<!date^${Math.floor(Date.now() / 1000)}^{time_secs} on {date_short}|${new Date().toISOString()}>`,
-            },
-          ],
-        },
-        ...(incident.description ? [{
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*Error:*\n\`\`\`${incident.description.substring(0, 500)}\`\`\``,
+          {
+            type: "section",
+            fields: [
+              { type: "mrkdwn", text: `*Flow:*\n${flow.name}` },
+              { type: "mrkdwn", text: `*Type:*\n${flow.type.toUpperCase()}` },
+              {
+                type: "mrkdwn",
+                text: failedStep
+                  ? `*Failed at step:*\n${failedStep.position}. ${failedStep.name}`
+                  : `*Failed step:*\nUnknown`,
+              },
+              {
+                type: "mrkdwn",
+                text: `*Detected:*\n<!date^${Math.floor(Date.now() / 1000)}^{time_secs} on {date_short}|${new Date().toISOString()}>`,
+              },
+            ],
           },
-        }] : []),
-        {
-          type: 'actions',
-          elements: [
-            {
-              type: 'button',
-              text:  { type: 'plain_text', text: '🔍 View Flow' },
-              url:   `${dashboardUrl}/flows/${flow.id}`,
-              style: isCritical ? 'danger' : 'primary',
-            },
-            {
-              type: 'button',
-              text: { type: 'plain_text', text: '📋 Incident' },
-              url:  `${dashboardUrl}/incidents/${incident.id}`,
-            },
-          ],
-        },
-        { type: 'divider' },
-        {
-          type: 'context',
-          elements: [{
-            type: 'mrkdwn',
-            text: `Syntrix Synthetic Monitor · <${dashboardUrl}|Open Dashboard>`,
-          }],
-        },
-      ],
-    }],
+          ...(incident.description
+            ? [
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: `*Error:*\n\`\`\`${incident.description.substring(0, 500)}\`\`\``,
+                  },
+                },
+              ]
+            : []),
+          {
+            type: "actions",
+            elements: [
+              {
+                type: "button",
+                text: { type: "plain_text", text: "🔍 View Flow" },
+                url: `${dashboardUrl}/flows/${flow.id}`,
+                style: isCritical ? "danger" : "primary",
+              },
+              {
+                type: "button",
+                text: { type: "plain_text", text: "📋 Incident" },
+                url: `${dashboardUrl}/incidents/${incident.id}`,
+              },
+            ],
+          },
+          { type: "divider" },
+          {
+            type: "context",
+            elements: [
+              {
+                type: "mrkdwn",
+                text: `Syntrix Synthetic Monitor · <${dashboardUrl}|Open Dashboard>`,
+              },
+            ],
+          },
+        ],
+      },
+    ],
   };
 
   try {
@@ -108,7 +110,7 @@ async function sendSlackAlert(incident, flow, failedStep) {
     console.log(`[Alerts] ✓ Slack alert sent for incident ${incident.id}`);
     return true;
   } catch (err) {
-    console.error('[Alerts] Slack send failed:', err.message);
+    console.error("[Alerts] Slack send failed:", err.message);
     return false;
   }
 }
@@ -116,34 +118,49 @@ async function sendSlackAlert(incident, flow, failedStep) {
 async function sendSlackResolution(incident, flow, durationMs) {
   if (!isSlackConfigured()) return false;
 
-  const s  = Math.round(durationMs / 1000);
-  const dur = s > 3600
-    ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
-    : s > 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
+  const s = Math.round(durationMs / 1000);
+  const dur =
+    s > 3600
+      ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
+      : s > 60
+        ? `${Math.floor(s / 60)}m ${s % 60}s`
+        : `${s}s`;
 
   try {
-    await axios.post(process.env.SLACK_WEBHOOK_URL, {
-      text: `✅ *Syntrix Resolved — ${flow.name}*`,
-      attachments: [{
-        color: '#00E676',
-        blocks: [
-          { type: 'section', text: { type: 'mrkdwn', text: `✅ *Resolved: ${flow.name}*` } },
+    await axios.post(
+      process.env.SLACK_WEBHOOK_URL,
+      {
+        text: `✅ *Syntrix Resolved — ${flow.name}*`,
+        attachments: [
           {
-            type: 'section',
-            fields: [
-              { type: 'mrkdwn', text: `*Flow:*\n${flow.name}` },
-              { type: 'mrkdwn', text: `*Incident duration:*\n${dur}` },
-              { type: 'mrkdwn', text: `*Status:*\nAll steps passing ✓` },
-              { type: 'mrkdwn', text: `*Resolved at:*\n${new Date().toUTCString()}` },
+            color: "#00E676",
+            blocks: [
+              {
+                type: "section",
+                text: { type: "mrkdwn", text: `✅ *Resolved: ${flow.name}*` },
+              },
+              {
+                type: "section",
+                fields: [
+                  { type: "mrkdwn", text: `*Flow:*\n${flow.name}` },
+                  { type: "mrkdwn", text: `*Incident duration:*\n${dur}` },
+                  { type: "mrkdwn", text: `*Status:*\nAll steps passing ✓` },
+                  {
+                    type: "mrkdwn",
+                    text: `*Resolved at:*\n${new Date().toUTCString()}`,
+                  },
+                ],
+              },
             ],
           },
         ],
-      }],
-    }, { timeout: 5000 });
+      },
+      { timeout: 5000 },
+    );
     console.log(`[Alerts] ✓ Slack resolution sent for ${flow.name}`);
     return true;
   } catch (err) {
-    console.error('[Alerts] Slack resolution failed:', err.message);
+    console.error("[Alerts] Slack resolution failed:", err.message);
     return false;
   }
 }
@@ -153,10 +170,10 @@ async function sendSlackResolution(incident, flow, durationMs) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function buildEmailHtml(incident, flow, failedStep) {
-  const isCritical = incident.severity === 'critical';
-  const accent = isCritical ? '#FF3D54' : '#FFCA28';
-  const label  = isCritical ? 'CRITICAL FAILURE' : 'DEGRADED PERFORMANCE';
-  const dash   = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const isCritical = incident.severity === "critical";
+  const accent = isCritical ? "#FF3D54" : "#FFCA28";
+  const label = isCritical ? "CRITICAL FAILURE" : "DEGRADED PERFORMANCE";
+  const dash = process.env.FRONTEND_URL || "http://localhost:3000";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -177,25 +194,36 @@ function buildEmailHtml(incident, flow, failedStep) {
     <!-- Grid -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
       ${[
-        ['Flow',         flow.name],
-        ['Type',         flow.type.toUpperCase()],
-        ['Failed Step',  failedStep ? `${failedStep.position}. ${failedStep.name}` : '—'],
-        ['Detected',     new Date().toUTCString()],
-        ['Severity',     incident.severity.toUpperCase()],
-        ['Interval',     `Every ${flow.interval_s}s`],
-      ].map(([label, val]) => `
+        ["Flow", flow.name],
+        ["Type", flow.type.toUpperCase()],
+        [
+          "Failed Step",
+          failedStep ? `${failedStep.position}. ${failedStep.name}` : "—",
+        ],
+        ["Detected", new Date().toUTCString()],
+        ["Severity", incident.severity.toUpperCase()],
+        ["Interval", `Every ${flow.interval_s}s`],
+      ]
+        .map(
+          ([label, val]) => `
         <div style="background:#0d1318;border:1px solid #1e2c38;border-radius:6px;padding:12px">
           <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#3a5060;margin-bottom:4px">${label}</div>
           <div style="font-size:13px;color:#c8d8e8;font-weight:600">${val}</div>
-        </div>`).join('')}
+        </div>`,
+        )
+        .join("")}
     </div>
 
-    ${incident.description ? `
+    ${
+      incident.description
+        ? `
     <!-- Error block -->
     <div style="background:#05090d;border:1px solid rgba(255,61,84,0.2);border-left:3px solid #ff3d54;border-radius:4px;padding:12px;margin-bottom:20px">
       <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#3a5060;margin-bottom:6px">Error Detail</div>
       <pre style="font-family:monospace;font-size:11px;color:#ff3d54;white-space:pre-wrap;word-break:break-all;margin:0">${incident.description.substring(0, 600)}</pre>
-    </div>` : ''}
+    </div>`
+        : ""
+    }
 
     <!-- CTA -->
     <div style="text-align:center;margin-top:24px">
@@ -221,21 +249,21 @@ function buildEmailHtml(incident, flow, failedStep) {
 
 async function sendEmailAlert(incident, flow, failedStep) {
   if (!isEmailConfigured()) {
-    console.log('[Alerts] Email not configured — skipping.');
+    console.log("[Alerts] Email not configured — skipping.");
     return false;
   }
 
   try {
-    await mailer.sendMail({
-      from:    `"Syntrix Alerts" <${process.env.SMTP_USER}>`,
-      to:      process.env.ALERT_EMAIL_TO,
+    await resend.emails.send({
+      from: "Syntrix Alerts <onboarding@syntrix-fawn.vercel.app>", // test sender
+      to: process.env.ALERT_EMAIL_TO,
       subject: `[Syntrix ${incident.severity.toUpperCase()}] ${incident.title}`,
-      html:    buildEmailHtml(incident, flow, failedStep),
+      html: buildEmailHtml(incident, flow, failedStep),
     });
     console.log(`[Alerts] ✓ Email sent to ${process.env.ALERT_EMAIL_TO}`);
     return true;
   } catch (err) {
-    console.error('[Alerts] Email failed:', err.message);
+    console.error("[Alerts] Email failed:", err.message);
     return false;
   }
 }
@@ -250,25 +278,25 @@ async function sendEmailAlert(incident, flow, failedStep) {
  */
 async function handleFailure(run, flow, steps, failedStepResult) {
   const failedStep = failedStepResult
-    ? steps.find(s => s.id === failedStepResult.step_id)
+    ? steps.find((s) => s.id === failedStepResult.step_id)
     : null;
 
-  const severity = run.status === 'failed' ? 'critical' : 'warning';
+  const severity = run.status === "failed" ? "critical" : "warning";
 
   const title = `${flow.name} — ${
     failedStep
       ? `Step ${failedStep.position} failed: ${failedStep.name}`
-      : 'Execution failed'
+      : "Execution failed"
   }`;
 
   // Check for an existing open incident
   const { rows: existing } = await query(
     `SELECT * FROM incidents WHERE flow_id = $1 AND status = 'open'
      ORDER BY opened_at DESC LIMIT 1`,
-    [flow.id]
+    [flow.id],
   );
 
-  const cooldown = parseInt(process.env.ALERT_COOLDOWN_SECONDS || '300');
+  const cooldown = parseInt(process.env.ALERT_COOLDOWN_SECONDS || "300");
 
   if (existing.length > 0) {
     const inc = existing[0];
@@ -279,21 +307,32 @@ async function handleFailure(run, flow, steps, failedStepResult) {
     // Update description with latest error
     await query(
       `UPDATE incidents SET description = $1, run_id = $2 WHERE id = $3`,
-      [failedStepResult?.error, run.id, inc.id]
+      [failedStepResult?.error, run.id, inc.id],
     );
 
     if (sinceAlert < cooldown) {
-      console.log(`[Alerts] Cooldown active (${Math.round(sinceAlert)}s) — skipping re-alert`);
+      console.log(
+        `[Alerts] Cooldown active (${Math.round(sinceAlert)}s) — skipping re-alert`,
+      );
       return inc;
     }
   }
 
   // Create a new incident record
-  const { rows: [incident] } = await query(
+  const {
+    rows: [incident],
+  } = await query(
     `INSERT INTO incidents
        (flow_id, failed_step_id, run_id, status, severity, title, description, alert_channels)
      VALUES ($1,$2,$3,'open',$4,$5,$6,'{}') RETURNING *`,
-    [flow.id, failedStep?.id ?? null, run.id, severity, title, failedStepResult?.error ?? null]
+    [
+      flow.id,
+      failedStep?.id ?? null,
+      run.id,
+      severity,
+      title,
+      failedStepResult?.error ?? null,
+    ],
   );
 
   // Dispatch alerts in parallel
@@ -302,10 +341,10 @@ async function handleFailure(run, flow, steps, failedStepResult) {
     sendEmailAlert(incident, flow, failedStep),
   ]);
 
-  const channels = [slackOk && 'slack', emailOk && 'email'].filter(Boolean);
+  const channels = [slackOk && "slack", emailOk && "email"].filter(Boolean);
   await query(
     `UPDATE incidents SET alert_sent_at = NOW(), alert_channels = $1 WHERE id = $2`,
-    [channels, incident.id]
+    [channels, incident.id],
   );
 
   // Notify dashboard via WebSocket
@@ -321,7 +360,7 @@ async function handleFailure(run, flow, steps, failedStepResult) {
 async function handleRecovery(flow, run) {
   const { rows: open } = await query(
     `SELECT * FROM incidents WHERE flow_id = $1 AND status = 'open'`,
-    [flow.id]
+    [flow.id],
   );
 
   for (const incident of open) {
@@ -331,15 +370,15 @@ async function handleRecovery(flow, run) {
       `UPDATE incidents
        SET status = 'resolved', resolved_at = NOW(), resolution_run_id = $1
        WHERE id = $2`,
-      [run.id, incident.id]
+      [run.id, incident.id],
     );
 
-    await Promise.allSettled([
-      sendSlackResolution(incident, flow, durationMs),
-    ]);
+    await Promise.allSettled([sendSlackResolution(incident, flow, durationMs)]);
 
     ws.incidentResolved(incident, flow);
-    console.log(`[Alerts] ✓ Incident ${incident.id} resolved after ${Math.round(durationMs / 1000)}s`);
+    console.log(
+      `[Alerts] ✓ Incident ${incident.id} resolved after ${Math.round(durationMs / 1000)}s`,
+    );
   }
 }
 
