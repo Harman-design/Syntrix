@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+
+* { box-sizing: border-box; }
+
+body {
+  background: #080c10;
+  color: #c8d8e8;
+  font-family: 'IBM Plex Mono', monospace;
+  min-height: 100vh;
+}
+
+/* CRT scan-line overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,212,255,0.012) 2px,
+    rgba(0,212,255,0.012) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #243340; border-radius: 3px; }
+
+@layer utilities {
+  .card  { @apply bg-bg2 border border-border rounded-lg; }
+  .label { @apply text-[9px] tracking-[2px] uppercase text-text3 font-semibold; }
+
+  /* status colours */
+  .s-passed   { @apply text-green; }
+  .s-failed   { @apply text-red; }
+  .s-degraded { @apply text-yellow; }
+  .s-slow     { @apply text-yellow; }
+  .s-skipped  { @apply text-text3; }
+  .s-running  { @apply text-accent; }
+}
